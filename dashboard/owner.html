@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KnockBell - HP Pemilik (Edge 2)</title>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;padding:16px;background:#f5f5f2;color:#1b1b1b;max-width:520px;margin:auto}
+.card{background:#fff;border:1px solid #ddd;border-radius:10px;padding:12px 14px;margin:10px 0}
+input{width:100%;box-sizing:border-box;padding:8px;border:1px solid #bbb;border-radius:6px;margin:4px 0 8px;font-size:16px}
+button{padding:10px 16px;border:0;border-radius:8px;background:#1b4f8a;color:#fff;font-size:16px}
+#alert{display:none;background:#b91c1c;color:#fff;font-size:22px;font-weight:700;text-align:center;padding:20px;border-radius:10px}
+#log{font:13px/1.5 ui-monospace,monospace;max-height:200px;overflow:auto}
+</style></head><body>
+<h1 style="font-size:20px">KnockBell - HP Pemilik (Edge 2)</h1>
+<div id="alert"></div>
+<div class="card">
+ <label>PROJECT_ID (sama dengan laptop)</label><input id="pid" value="kelas_iot_kelompok_XX">
+ <label>MQTT WebSocket URL</label><input id="url" value="wss://broker.hivemq.com:8884/mqtt">
+ <button id="go" onclick="start()">Mulai</button>
+ <p id="status">Belum mulai. Taruh HP di meja, layar tetap menyala, volume dinyalakan.</p>
+ <p>hf_rms: <b id="f1">-</b> | rotasi: <b id="f2">-</b> rad | pesan terkirim: <b id="f3">0</b></p>
+</div>
+<div class="card"><b>Log</b><div id="log"></div></div>
+<script>
+//<core>  (port dari shared/processing.py)
+const ALPHA=0.1, PEAK_THR=1.0, MIN_GAP=0.12, WINDOW=75, STRIDE=25;
+let baseline=null, buf=[];
+function push(t,acc,gyro){
+  const m=Math.hypot(acc[0],acc[1],acc[2]);
+  if(baseline===null) baseline=m;
+  baseline+=ALPHA*(m-baseline);
+  buf.push([t,m-baseline,Math.hypot(gyro[0],gyro[1],gyro[2])]);
+  if(buf.length>WINDOW) buf.shift();
+}
+function features(){
+  const hp=buf.map(b=>Math.abs(b[1]));
+  const hf=Math.sqrt(hp.reduce((a,h)=>a+h*h,0)/hp.length);
+  let peaks=0,last=-1e9;
+  for(let i=0;i<hp.length;i++){
+    const l=i>0?hp[i-1]:0, r=i<hp.length-1?hp[i+1]:0;
+    if(hp[i]>=PEAK_THR&&hp[i]>=l&&hp[i]>=r&&buf[i][0]-last>=MIN_GAP){peaks++;last=buf[i][0];}
+  }
+  let rot=0; for(let i=1;i<buf.length;i++) rot+=buf[i][2]*(buf[i][0]-buf[i-1][0]);
+  const r3=x=>Math.round(x*1000)/1000;
+  return {peak_count:peaks,peak_max:r3(Math.max(...hp)),hf_rms:r3(hf),rotation_rad:r3(rot),omega_peak:r3(Math.max(...buf.map(b=>b[2])))};
+}
+//</core>
+let client, T, seq=0, since=0, audio, wake;
+const $=id=>document.getElementById(id);
+function log(s){const d=document.createElement("div");d.textContent=new Date().toLocaleTimeString()+"  "+s;$("log").prepend(d)}
+function beep(){ if(!audio)return; for(let i=0;i<3;i++){const o=audio.createOscillator(),g=audio.createGain();o.frequency.value=880;g.gain.value=0.4;
+  o.connect(g);g.connect(audio.destination);o.start(audio.currentTime+i*0.4);o.stop(audio.currentTime+i*0.4+0.25);} }
+function showAlert(msg){const a=$("alert");a.textContent=msg;a.style.display="block";beep();
+  if(navigator.vibrate)navigator.vibrate([400,200,400]);
+  try{speechSynthesis.speak(new SpeechSynthesisUtterance(msg))}catch(e){}
+  setTimeout(()=>a.style.display="none",8000)}
+async function start(){
+  const P=$("pid").value.trim(); T=(...p)=>["knockbell",P,...p].join("/");
+  audio=new (window.AudioContext||window.webkitAudioContext)(); audio.resume();
+  if(typeof DeviceMotionEvent!=="undefined"&&typeof DeviceMotionEvent.requestPermission==="function"){
+    const r=await DeviceMotionEvent.requestPermission();
+    if(r!=="granted"){$("status").textContent="Izin sensor gerak ditolak.";return}
+  }
+  try{wake=await navigator.wakeLock.request("screen")}catch(e){log("Wake lock tidak tersedia, jaga layar tetap menyala manual")}
+  client=mqtt.connect($("url").value,{clientId:"knockbell-"+P+"-edge2-web-"+Math.random().toString(16).slice(2,8),
+    will:{topic:T("edge","edge2","status"),payload:JSON.stringify({state:"offline"}),qos:1,retain:true}});
+  client.on("connect",()=>{$("status").textContent="Terhubung ke broker. Menunggu alert...";
+    client.subscribe(T("events"),{qos:1});
+    client.publish(T("edge","edge2","status"),JSON.stringify({state:"online"}),{qos:1,retain:true});log("terhubung")});
+  client.on("close",()=>$("status").textContent="Terputus, mencoba menyambung lagi...");
+  client.on("message",(t,m)=>{let d;try{d=JSON.parse(m.toString())}catch(e){return}
+    if(d.type==="KNOCK_ALERT"||d.type==="INTRUSION_ALERT"){log(d.type+": "+d.message);showAlert(d.message)}
+    else if(d.type==="REPLY_PLAYED"||d.type==="ACK")log(d.type+": "+d.message)});
+  window.addEventListener("devicemotion",e=>{
+    const a=e.accelerationIncludingGravity, r=e.rotationRate;
+    if(!a||a.x==null)return;
+    const D=Math.PI/180, g=r&&r.alpha!=null?[r.alpha*D,r.beta*D,r.gamma*D]:[0,0,0];
+    push(performance.now()/1000,[a.x,a.y,a.z],g);
+    if(++since>=STRIDE&&buf.length===WINDOW){since=0;const f=features();seq++;
+      $("f1").textContent=f.hf_rms;$("f2").textContent=f.rotation_rad;$("f3").textContent=seq;
+      if(client&&client.connected)client.publish(T("edge","edge2","telemetry"),
+        JSON.stringify({device_id:"edge2",sequence:seq,sent_at_ms:Date.now(),features:f}),{qos:0})}
+  });
+  $("go").disabled=true;
+}
+</script></body></html>
