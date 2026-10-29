@@ -44,15 +44,21 @@ class Detector:
 
     def on_door(self, f):
         label = classify(f, self.model)
-        if label == "KNOCK" and not self._cooling("KNOCK"):
-            self.pending_knock = self.clock()
-            self._emit("KNOCK_ALERT", "Ada yang mengetuk pintu.", label)
-        elif label in ("DOOR_MOVE", "DOOR_SLAM") and not self._cooling("DOOR"):
-            what = "dibanting" if label == "DOOR_SLAM" else "dibuka/ditutup"
-            if self.mode == "AWAY":
-                self._emit("INTRUSION_ALERT", f"Pintu {what} saat kamu pergi!", label)
-            else:
-                self._emit("DOOR_INFO", f"Pintu {what}.", label)
+        if label == "KNOCK":
+            if self.clock() - self.last_event.get("DOOR", -1e9) < 3.0:
+                self._state(label)
+                return label
+            if not self._cooling("KNOCK"):
+                self.pending_knock = self.clock()
+                self._emit("KNOCK_ALERT", "Ada yang mengetuk pintu.", label)
+        elif label in ("DOOR_MOVE", "DOOR_SLAM"):
+            self.last_event["KNOCK"] = self.clock()
+            if not self._cooling("DOOR"):
+                what = "dibanting" if label == "DOOR_SLAM" else "dibuka/ditutup"
+                if self.mode == "AWAY":
+                    self._emit("INTRUSION_ALERT", f"Pintu {what} saat kamu pergi!", label)
+                else:
+                    self._emit("DOOR_INFO", f"Pintu {what}.", label)
         self._state(label)
         return label
 
