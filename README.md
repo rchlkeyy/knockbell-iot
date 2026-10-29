@@ -1,6 +1,6 @@
 # KnockBell — Bel Pintu Pintar Dua Arah dari Dua HP
 
-Mata Kuliah Internet of Things · Tugas Kelompok · `<isi nama kelompok & anggota>`
+Mata Kuliah Internet of Things · Kelompok 7
 
 **Masalah:** penghuni kos/ruang belajar yang memakai headphone atau tertidur tidak mendengar ketukan pintu
 (tamu, kurir, teman), dan tidak tahu kalau pintunya dibuka orang saat ia pergi.
