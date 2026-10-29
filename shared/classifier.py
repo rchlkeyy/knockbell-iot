@@ -11,13 +11,13 @@ MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "model", "door_tree.j
 
 
 def rule_based(f: dict) -> str:
-    if f["peak_max"] >= 5.0 or f["rotation_rad"] >= 8.0:
+    if f["peak_max"] >= 5.0 or f["rotation_rad"] >= 7.0:
         return "DOOR_SLAM"
         
-    if f["rotation_rad"] >= 2.0:
+    if f["rotation_rad"] >= 1.5 or f["omega_peak"] >= 1.5:
         return "DOOR_MOVE"
         
-    if f["peak_max"] >= 0.27 or f["peak_count"] >= 1:
+    if f["peak_count"] >= 1 or f["peak_max"] >= 0.6:
         return "KNOCK"
         
     return "IDLE"
