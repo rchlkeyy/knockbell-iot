@@ -45,15 +45,38 @@ class Detector:
 
     def on_door(self, f):
         label = classify(f, self.model)
-        if label == "KNOCK" and not self._cooling("KNOCK"):
-            self.pending_knock = self.clock()
-            self._emit("KNOCK_ALERT", "Ada yang mengetuk pintu.", label)
-        elif label in ("DOOR_MOVE", "DOOR_SLAM") and not self._cooling("DOOR"):
-            what = "dibanting" if label == "DOOR_SLAM" else "dibuka/ditutup"
-            if self.mode == "AWAY":
-                self._emit("INTRUSION_ALERT", f"Pintu {what} saat kamu pergi!", label)
-            else:
-                self._emit("DOOR_INFO", f"Pintu {what}.", label)
+        waktu_sekarang = self.clock()
+
+        # 1. Jika terdeteksi DOOR_MOVE atau DOOR_SLAM
+        if label in ("DOOR_MOVE", "DOOR_SLAM"):
+            self.pending_knock = None 
+            
+            # Catat persis kapan pintu TERAKHIR KALI terdeteksi bergerak/bergetar hebat
+            self.last_event["DOOR_RAW"] = waktu_sekarang 
+            
+            if not self._cooling("DOOR"):
+                what = "dibanting" if label == "DOOR_SLAM" else "dibuka/ditutup"
+                if self.mode == "AWAY":
+                    self._emit("INTRUSION_ALERT", f"Pintu {what} saat kamu pergi!", label)
+                else:
+                    self._emit("DOOR_INFO", f"Pintu {what}.", label)
+
+        # 2. Jika terdeteksi KNOCK
+        elif label == "KNOCK":
+            # Cek kapan terakhir pintu bergerak
+            waktu_terakhir_pintu_gerak = self.last_event.get("DOOR_RAW", -1e9)
+            
+            # Hanya proses ketukan jika sudah lewat 3 detik semenjak pintu berhenti total
+            if (waktu_sekarang - waktu_terakhir_pintu_gerak) > 3.0:
+                if not self._cooling("KNOCK"):
+                    self.pending_knock = waktu_sekarang
+        
+        # 3. Jika sedang IDLE
+        elif label == "IDLE":
+            if self.pending_knock and (waktu_sekarang - self.pending_knock > 1.0):
+                self._emit("KNOCK_ALERT", "Ada yang mengetuk pintu.", "KNOCK")
+                self.pending_knock = None
+
         self._state(label)
         return label
 

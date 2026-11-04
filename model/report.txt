@@ -1,0 +1,42 @@
+Sumber data: C:\Users\ASUS\Downloads\knockbell\tools\..\data\real_v2.csv
+Jumlah window: 576 | rekaman: 12 | fitur: ['peak_count', 'peak_max', 'hf_rms', 'rotation_rad', 'omega_peak', 'omega_rms', 'active_ratio']
+Window per kelas: {'IDLE': 179, 'KNOCK': 161, 'DOOR_MOVE': 159, 'DOOR_SLAM': 77} | rekaman per kelas: {'IDLE': 4, 'KNOCK': 3, 'DOOR_MOVE': 3, 'DOOR_SLAM': 2}
+
+Akurasi if-else (rule-based): 0.720
+Decision Tree kedalaman 2: akurasi CV = 0.677
+Decision Tree kedalaman 3: akurasi CV = 0.955
+Decision Tree kedalaman 4: akurasi CV = 0.955
+Decision Tree kedalaman 5: akurasi CV = 0.955
+
+Dipilih kedalaman 3 (akurasi CV 0.955) dibanding if-else 0.720
+
+              precision    recall  f1-score   support
+
+        IDLE      0.994     1.000     0.997       179
+       KNOCK      0.982     0.994     0.988       161
+   DOOR_MOVE      0.878     1.000     0.935       159
+   DOOR_SLAM      1.000     0.675     0.806        77
+
+    accuracy                          0.955       576
+   macro avg      0.964     0.917     0.932       576
+weighted avg      0.960     0.955     0.952       576
+
+Confusion matrix (baris=asli, kolom=prediksi) urutan ['IDLE', 'KNOCK', 'DOOR_MOVE', 'DOOR_SLAM']:
+[[179   0   0   0]
+ [  1 160   0   0]
+ [  0   0 159   0]
+ [  0   3  22  52]]
+
+Aturan yang dipelajari model:
+|--- omega_peak <= 6.41
+|   |--- rotation_rad <= 0.17
+|   |   |--- class: IDLE
+|   |--- rotation_rad >  0.17
+|   |   |--- rotation_rad <= 1.91
+|   |   |   |--- class: KNOCK
+|   |   |--- rotation_rad >  1.91
+|   |   |   |--- class: DOOR_MOVE
+|--- omega_peak >  6.41
+|   |--- class: DOOR_SLAM
+
+Model disimpan: C:\Users\ASUS\Downloads\knockbell\model\door_tree.joblib
