@@ -62,9 +62,12 @@ class Simulator:
             return ["IDLE"] * 4 + ["KNOCK"] + ["IDLE"] * 4 + ["DOOR_MOVE"] + ["IDLE"] * 4 + ["DOOR_SLAM"]
         return ["IDLE"] * 4 + [self.MAP.get(self.scenario, "IDLE")]
 
-    def stream(self):
+    def stream(self, max_seconds=None):
+        t0 = time.monotonic()
         while True:
             for label in self._next_labels():
                 for a, g in make_segment(label, self.rng, 75):
                     yield Sample(time.monotonic(), a, g)
                     time.sleep(1 / RATE)
+                    if max_seconds and time.monotonic() - t0 > max_seconds:
+                        return

@@ -1,9 +1,19 @@
 """Pembaca sensor HP Android lewat Termux:API (streaming) + pemilihan sumber."""
 import json
+import queue
 import subprocess
+import threading
 import time
 from .processing import Sample
 from .simulator import Simulator
+
+
+def _cleanup():
+    """Lepas listener sensor yang masih menggantung (penyebab rekaman ke-2 macet)."""
+    try:
+        subprocess.run(["termux-sensor", "-c"], capture_output=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 def find_sensor_names():
@@ -28,13 +38,34 @@ class TermuxSensors:
             raise RuntimeError("Accelerometer/Gyroscope tidak ditemukan. Cek: termux-sensor -l")
         self.delay_ms = delay_ms
 
-    def stream(self):
+    def stream(self, max_seconds=None, first_timeout=8):
+        """Alirkan sampel. Berhenti sendiri setelah max_seconds, dan gagal jelas kalau sensor macet."""
+        _cleanup()
         cmd = ["termux-sensor", "-s", f"{self.acc_name},{self.gyro_name}", "-d", str(self.delay_ms)]
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
-        dec, buf = json.JSONDecoder(), ""
+        q = queue.Queue()
+
+        def reader():
+            for line in proc.stdout:
+                q.put(line)
+            q.put(None)
+
+        threading.Thread(target=reader, daemon=True).start()
+        dec, buf, got, t0 = json.JSONDecoder(), "", False, time.monotonic()
         acc, gyro = (0.0, 0.0, 9.81), (0.0, 0.0, 0.0)
         try:
-            for line in proc.stdout:
+            while True:
+                try:
+                    line = q.get(timeout=1.0)
+                except queue.Empty:
+                    if max_seconds and time.monotonic() - t0 > max_seconds:
+                        return
+                    if not got and time.monotonic() - t0 > first_timeout:
+                        raise RuntimeError("Sensor tidak mengirim data. Jalankan 'termux-sensor -c', tutup lalu "
+                                           "buka Termux lagi, dan biarkan layar menyala.")
+                    continue
+                if line is None:
+                    return
                 buf += line
                 while True:
                     s = buf.lstrip()
@@ -50,9 +81,17 @@ class TermuxSensors:
                         gyro = tuple(float(v) for v in obj[self.gyro_name]["values"][:3])
                     if self.acc_name in obj:
                         acc = tuple(float(v) for v in obj[self.acc_name]["values"][:3])
+                        got = True
                         yield Sample(time.monotonic(), acc, gyro)
+                        if max_seconds and time.monotonic() - t0 > max_seconds:
+                            return
         finally:
             proc.terminate()
+            try:
+                proc.wait(2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            _cleanup()
 
 
 def get_source(kind: str, role: str, scenario: str):

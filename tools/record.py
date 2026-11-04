@@ -38,23 +38,29 @@ def record(label, seconds, source_kind, writer):
     source, name = get_source(source_kind, "door", label.lower())
     session = f"{label}-{int(time.time())}"
     proc, since, kept, total, t0 = Processor(WINDOW), 0, 0, 0, time.time()
-    for s in source.stream():
-        proc.push(s)
-        total += 1
-        since += 1
-        if proc.ready() and since >= STRIDE:
-            since = 0
-            ft = proc.features()
-            if not (label != "IDLE" and ft["peak_max"] < 1.0 and ft["omega_peak"] < 0.3):
-                writer.writerow([ft[k] for k in FEATURE_KEYS] + [label, session])
-                kept += 1
-        if time.time() - t0 > seconds:
-            break
-    rate = total / (time.time() - t0)
+    try:
+        for s in source.stream(max_seconds=seconds):
+            proc.push(s)
+            total += 1
+            since += 1
+            if proc.ready() and since >= STRIDE:
+                since = 0
+                ft = proc.features()
+                if not (label != "IDLE" and ft["peak_max"] < 1.0 and ft["omega_peak"] < 0.3):
+                    writer.writerow([ft[k] for k in FEATURE_KEYS] + [label, session])
+                    kept += 1
+    except RuntimeError as e:
+        print(f"   GAGAL merekam {label}: {e}")
+        return False
+    if total == 0:
+        print(f"   GAGAL merekam {label}: tidak ada data sensor. Jalankan 'termux-sensor -c', tutup lalu buka Termux lagi.")
+        return False
+    rate = total / max(time.time() - t0, 1e-6)
     print(f"   {label}: {kept} window disimpan | laju sensor ~{rate:.0f} Hz ({name})")
     if rate < 30:
         print("   PERINGATAN: laju sensor rendah (<30 Hz), ketukan bisa terlewat. Tutup aplikasi lain, "
               "matikan hemat baterai untuk Termux, lalu coba lagi.")
+    return True
 
 
 if __name__ == "__main__":
@@ -78,7 +84,8 @@ if __name__ == "__main__":
             say(f"Rekaman {i} dari {len(jobs)}. {msg}. Mulai dalam 5 detik")
             time.sleep(5)
             say("Mulai")
-            record(label, sec, a.source, w)
+            if not record(label, sec, a.source, w):
+                break
             f.flush()
             say("Selesai, istirahat sebentar")
             time.sleep(2)
