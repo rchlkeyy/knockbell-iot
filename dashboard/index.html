@@ -16,7 +16,7 @@ button.on{background:#1b4f8a;color:#fff}.big{font-size:28px;font-weight:700}
  <input id="pid" size="26" value="kelas_iot_kelompok_XX"> <input id="url" size="34" value="wss://broker.hivemq.com:8884/mqtt">
  <button onclick="connect()">Hubungkan</button></div>
 <div class="card"><h2>Status pintu (Edge 1)</h2><div id="label" class="big IDLE">-</div>
- <div>Mode: <b id="mode">HOME</b> | HP pemilik: <b id="owner">-</b></div>
+ <div>Mode: <b id="mode">HOME</b> | HP pemilik: <b id="owner">-</b> | Algoritma: <b id="algo">-</b></div>
  <button id="bh" onclick="setMode('HOME')">Mode HOME</button><button id="ba" onclick="setMode('AWAY')">Mode AWAY (jaga pintu)</button></div>
 <div class="card"><h2>Balas tamu (dibacakan HP di pintu)</h2>
  <button onclick="reply('Sebentar ya, penghuni sedang menuju pintu.')">Sebentar ya</button>
@@ -36,7 +36,7 @@ function connect(){
   c.on("close",()=>document.getElementById("conn").textContent="(terputus)");
   c.on("message",(t,m)=>{let d;try{d=JSON.parse(m.toString())}catch(e){return}
     if(t===T("state")){const l=document.getElementById("label");l.textContent=d.label;l.className="big "+d.label;
-      document.getElementById("mode").textContent=d.mode;document.getElementById("owner").textContent=d.owner_active?"diangkat":"diam";
+      document.getElementById("mode").textContent=d.mode;document.getElementById("owner").textContent=d.owner_active?"diangkat":"diam";document.getElementById("algo").textContent=d.algo||"-";
       document.getElementById("bh").className=d.mode==="HOME"?"on":"";document.getElementById("ba").className=d.mode==="AWAY"?"on":""}
     else if(t===T("events")){const e=document.createElement("div");e.className=d.type;
       e.textContent=new Date(d.ts).toLocaleTimeString()+"  "+d.type+": "+d.message;

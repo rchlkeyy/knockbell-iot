@@ -28,6 +28,7 @@ class Detector:
         self.last_event = {}
         self.pending_knock = None
         self.owner_is_active = False
+        self.algo = "Decision Tree" if model is not None else "rule-based"
 
     def _emit(self, etype, message, label=None):
         ev = {"type": etype, "message": message, "label": label, "mode": self.mode,
@@ -44,21 +45,15 @@ class Detector:
 
     def on_door(self, f):
         label = classify(f, self.model)
-        if label == "KNOCK":
-            if self.clock() - self.last_event.get("DOOR", -1e9) < 3.0:
-                self._state(label)
-                return label
-            if not self._cooling("KNOCK"):
-                self.pending_knock = self.clock()
-                self._emit("KNOCK_ALERT", "Ada yang mengetuk pintu.", label)
-        elif label in ("DOOR_MOVE", "DOOR_SLAM"):
-            self.last_event["KNOCK"] = self.clock()
-            if not self._cooling("DOOR"):
-                what = "dibanting" if label == "DOOR_SLAM" else "dibuka/ditutup"
-                if self.mode == "AWAY":
-                    self._emit("INTRUSION_ALERT", f"Pintu {what} saat kamu pergi!", label)
-                else:
-                    self._emit("DOOR_INFO", f"Pintu {what}.", label)
+        if label == "KNOCK" and not self._cooling("KNOCK"):
+            self.pending_knock = self.clock()
+            self._emit("KNOCK_ALERT", "Ada yang mengetuk pintu.", label)
+        elif label in ("DOOR_MOVE", "DOOR_SLAM") and not self._cooling("DOOR"):
+            what = "dibanting" if label == "DOOR_SLAM" else "dibuka/ditutup"
+            if self.mode == "AWAY":
+                self._emit("INTRUSION_ALERT", f"Pintu {what} saat kamu pergi!", label)
+            else:
+                self._emit("DOOR_INFO", f"Pintu {what}.", label)
         self._state(label)
         return label
 
@@ -78,7 +73,7 @@ class Detector:
     def _state(self, label):
         self.publish(topic("state"), {"label": label, "mode": self.mode,
                                        "owner_active": self.owner_is_active,
-                                       "ts": int(self.clock() * 1000)})
+                                       "algo": self.algo, "ts": int(self.clock() * 1000)})
 
 
 def main():
@@ -86,6 +81,8 @@ def main():
 
     model = load_model()
     print(f"PROJECT_ID: {PROJECT_ID} | algoritma: {'Decision Tree' if model else 'rule-based'}")
+    if model:
+        print(f"[AI] fitur: {model['features']} | meta: {model.get('meta', {})}")
 
     holder = {}
 

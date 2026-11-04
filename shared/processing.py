@@ -54,13 +54,17 @@ class Processor:
                 last_t = t
         # B. rotasi: integral |omega| dt
         rotation = sum(b[i][2] * (b[i][0] - b[i - 1][0]) for i in range(1, len(b)))
+        active = sum(1 for h in hp if h >= 0.3) / len(hp)          # porsi window yang "bergetar"
+        omega_rms = sqrt(sum(x[2] * x[2] for x in b) / len(b))
         return {
             "peak_count": peaks,
             "peak_max": round(max(hp), 3),
             "hf_rms": round(hf_rms, 3),
             "rotation_rad": round(rotation, 3),
             "omega_peak": round(max(x[2] for x in b), 3),
+            "omega_rms": round(omega_rms, 3),
+            "active_ratio": round(active, 3),
         }
 
 
-FEATURE_KEYS = ["peak_count", "peak_max", "hf_rms", "rotation_rad", "omega_peak"]
+FEATURE_KEYS = ["peak_count", "peak_max", "hf_rms", "rotation_rad", "omega_peak", "omega_rms", "active_ratio"]

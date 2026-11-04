@@ -11,28 +11,27 @@ MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "model", "door_tree.j
 
 
 def rule_based(f: dict) -> str:
-    if f["omega_peak"] >= 5.0 and f["peak_max"] >= 4.0:
+    if f["peak_max"] >= 6.0 and f["omega_peak"] >= 2.0:
         return "DOOR_SLAM"
-        
-    if f["omega_peak"] >= 1.5:
+    if f["rotation_rad"] >= 0.4 and f["omega_peak"] >= 0.5:
         return "DOOR_MOVE"
-        
-    if f["peak_max"] >= 0.8 or f["peak_count"] >= 1:
+    if f["peak_count"] >= 2 and f["rotation_rad"] < 0.15:
         return "KNOCK"
-        
     return "IDLE"
 
 
 def load_model():
+    """Kembalikan bundle {'model','features','meta'} atau None kalau belum dilatih."""
     try:
         import joblib
-        return joblib.load(MODEL_PATH)
+        b = joblib.load(MODEL_PATH)
+        return b if isinstance(b, dict) else {"model": b, "features": FEATURE_KEYS[:5], "meta": {}}
     except Exception:
         return None
 
 
-def tree_predict(model, f: dict) -> str:
-    return str(model.predict([[f[k] for k in FEATURE_KEYS]])[0])
+def tree_predict(bundle, f: dict) -> str:
+    return str(bundle["model"].predict([[f[k] for k in bundle["features"]]])[0])
 
 
 def classify(f: dict, model=None) -> str:

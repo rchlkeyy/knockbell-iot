@@ -1,6 +1,6 @@
 # KnockBell — Bel Pintu Pintar Dua Arah dari Dua HP
 
-Mata Kuliah Internet of Things · Kelompok 7
+Mata Kuliah Internet of Things · Tugas Kelompok · `<isi nama kelompok & anggota>`
 
 **Masalah:** penghuni kos/ruang belajar yang memakai headphone atau tertidur tidak mendengar ketukan pintu
 (tamu, kurir, teman), dan tidak tahu kalau pintunya dibuka orang saat ia pergi.
@@ -52,3 +52,16 @@ python tests/test_all.py
 `dashboard/owner.html` menggantikan `nodes/edge.py --role owner` di iPhone/Safari. Halaman harus dibuka lewat
 HTTPS (mis. GitHub Pages): `https://USERNAME.github.io/knockbell-iot/dashboard/owner.html`.
 Isi PROJECT_ID yang sama, tekan Mulai, izinkan sensor gerak, biarkan layar menyala.
+
+## AI (machine learning): Decision Tree dari data asli
+- **Input:** 7 fitur per window 1,5 detik dari HP di pintu (jumlah puncak getaran, getaran maks, RMS getaran,
+  total rotasi, kecepatan putar maks, RMS putaran, porsi window yang bergetar).
+- **Proses:** Decision Tree (scikit-learn) dilatih dari rekaman data asli berlabel (`tools/record.py --guided`),
+  dievaluasi dengan cross-validation per rekaman dan dibandingkan dengan if-else (`tools/train_model.py`).
+- **Output:** kelas IDLE / KNOCK / DOOR_MOVE / DOOR_SLAM. Detector memakai model otomatis bila `model/door_tree.joblib`
+  ada; dashboard menampilkan algoritma yang aktif. Laporan hasil latihan: `model/report.txt`.
+```bash
+python tools/record.py --guided      # di HP A (Termux), ~8 menit, ikuti suara
+python tools/train_model.py          # di laptop, setelah data/real_v2.csv dipindah
+python nodes/detector.py             # harus mencetak "algoritma: Decision Tree"
+```
